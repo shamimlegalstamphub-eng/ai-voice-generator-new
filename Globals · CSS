@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0A0B14;
+  --bg-soft: #11131F;
+  --text: #F4F3FA;
+  --text-muted: #9295B5;
+}
+
+html.light {
+  --bg: #F7F7FB;
+  --bg-soft: #FFFFFF;
+  --text: #14151F;
+  --text-muted: #6B6E8A;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 124, 250, 0.35);
+  border-radius: 999px;
+}
+
+/* Focus visibility */
+:focus-visible {
+  outline: 2px solid #8B7CFA;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/[0.04] backdrop-blur-xl border border-white/[0.08];
+  }
+
+  html.light .glass {
+    @apply bg-white/70 border-ink/[0.06];
+  }
+
+  .glass-strong {
+    @apply bg-white/[0.06] backdrop-blur-2xl border border-white/[0.10];
+  }
+
+  html.light .glass-strong {
+    @apply bg-white/90 border-ink/[0.06];
+  }
+
+  .text-gradient {
+    @apply bg-spectrum bg-clip-text text-transparent;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-spectrum px-6 py-3 font-display font-semibold text-ink shadow-glow transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98];
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-white/15 px-6 py-3 font-display font-semibold text-text transition-colors duration-200 hover:bg-white/5;
+  }
+
+  html.light .btn-ghost {
+    @apply border-ink/10 hover:bg-ink/5;
+  }
+
+  .card {
+    @apply glass rounded-xl2 p-6;
+  }
+
+  .label-eyebrow {
+    @apply font-mono text-xs uppercase tracking-[0.2em] text-cyan;
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-text placeholder:text-muted focus:border-violet/60 focus:outline-none;
+  }
+
+  html.light .input-field {
+    @apply border-ink/10 bg-ink/[0.02];
+  }
+}
+
+.text-text { color: var(--text); }
+.text-muted-v { color: var(--text-muted); }
+.bg-bg { background-color: var(--bg); }
+.bg-bg-soft { background-color: var(--bg-soft); }
