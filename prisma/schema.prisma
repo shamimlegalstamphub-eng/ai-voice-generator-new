@@ -1,0 +1,320 @@
+// Prisma schema for VoiceForge AI
+// Run `npx prisma db push` (or `npm run db:push`) after setting DATABASE_URL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PlanType {
+  STARTER
+  PRO
+  BUSINESS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum TransactionStatus {
+  CREATED
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum VoiceCategory {
+  MALE
+  FEMALE
+  CHARACTER
+  REGIONAL
+}
+
+enum VoiceStatus {
+  ACTIVE
+  DISABLED
+  PENDING_REVIEW
+}
+
+enum AudioStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum ReferralStatus {
+  PENDING
+  REWARDED
+}
+
+enum CouponDiscountType {
+  PERCENT
+  FLAT
+}
+
+enum CouponStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum TokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+enum CloneMode {
+  INSTANT
+  PROFESSIONAL
+}
+
+enum CloneStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Core models
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String   @id @default(cuid())
+  name            String
+  email           String   @unique
+  password        String
+  role            Role     @default(USER)
+  emailVerified   DateTime?
+
+  // Credits & usage
+  creditsTotal     Int     @default(10000)
+  creditsRemaining Int     @default(10000)
+
+  // Referrals
+  referralCode    String   @unique @default(cuid())
+  referredById    String?
+  referredBy      Referral? @relation("ReferredUser")
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  subscription    Subscription?
+  transactions    Transaction[]
+  generatedAudio  GeneratedAudio[]
+  voices          Voice[]          @relation("VoiceOwner")
+  voiceClones     VoiceCloneJob[]
+  apiKeys         ApiKey[]
+  tokens          VerificationToken[]
+  referralsMade   Referral[]       @relation("Referrer")
+
+  @@map("users")
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  userId                 String             @unique
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan                   PlanType           @default(STARTER)
+  status                 SubscriptionStatus @default(ACTIVE)
+
+  razorpaySubscriptionId String?
+  razorpayCustomerId     String?
+
+  currentPeriodStart     DateTime           @default(now())
+  currentPeriodEnd       DateTime?
+
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  @@map("subscriptions")
+}
+
+model Transaction {
+  id               String             @id @default(cuid())
+  userId           String
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  plan             PlanType
+  amount           Int                // amount in paise (INR)
+  currency         String             @default("INR")
+  status           TransactionStatus  @default(CREATED)
+  method           String?            // upi, card, wallet, netbanking
+
+  razorpayOrderId   String?           @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+
+  couponCode       String?
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@map("transactions")
+}
+
+model Voice {
+  id               String        @id @default(cuid())
+  name             String
+  category         VoiceCategory
+  style            String
+  language         String
+  tags             String[]      @default([])
+
+  // Maps to the underlying TTS provider's voice id (ElevenLabs / OpenAI)
+  providerVoiceId  String
+  provider         String        @default("openai")
+
+  isCloned         Boolean       @default(false)
+  ownerId          String?
+  owner            User?         @relation("VoiceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  status           VoiceStatus   @default(ACTIVE)
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  generatedAudio   GeneratedAudio[]
+  cloneJobs        VoiceCloneJob[]
+
+  @@unique([name, language])
+  @@map("voices")
+}
+
+model GeneratedAudio {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  voiceId     String
+  voice       Voice       @relation(fields: [voiceId], references: [id])
+
+  text        String
+  characters  Int
+  emotion     String?
+  speed       Float       @default(1.0)
+  pitch       Float       @default(1.0)
+  stability   Float       @default(0.65)
+
+  audioUrl    String?
+  durationSec Int?
+  status      AudioStatus @default(PENDING)
+
+  createdAt   DateTime    @default(now())
+
+  @@map("generated_audio")
+}
+
+model VoiceCloneJob {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String
+  mode          CloneMode   @default(INSTANT)
+  sourceAudioUrl String
+
+  status        CloneStatus @default(PENDING)
+  progress      Int         @default(0)
+
+  resultVoiceId String?
+  resultVoice   Voice?      @relation(fields: [resultVoiceId], references: [id])
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("voice_clone_jobs")
+}
+
+model Referral {
+  id             String         @id @default(cuid())
+
+  referrerId     String
+  referrer       User           @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+
+  referredUserId String         @unique
+  referredUser   User           @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+
+  status         ReferralStatus @default(PENDING)
+  rewardAmount   Int            @default(0) // credit awarded, in characters
+
+  createdAt      DateTime       @default(now())
+  rewardedAt     DateTime?
+
+  @@map("referrals")
+}
+
+model Coupon {
+  id           String             @id @default(cuid())
+  code         String             @unique
+  discountType CouponDiscountType @default(PERCENT)
+  discountValue Int               // percent (0-100) or flat paise amount
+  maxUses      Int?
+  usedCount    Int                @default(0)
+  status       CouponStatus       @default(ACTIVE)
+  expiresAt    DateTime?
+
+  createdAt    DateTime           @default(now())
+
+  @@map("coupons")
+}
+
+model BlogPost {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  category  String
+  excerpt   String
+  content   String[] // paragraphs
+  readTime  String
+  published Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("blog_posts")
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label     String
+  hashedKey String   @unique
+  lastUsed  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("api_keys")
+}
+
+model VerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token     String    @unique
+  type      TokenType
+  expiresAt DateTime
+
+  createdAt DateTime  @default(now())
+
+  @@map("verification_tokens")
+}
